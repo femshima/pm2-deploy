@@ -112,7 +112,7 @@ let handler = async function (data_s: string) {
         }
 
         //execute npm script
-        await concurrently([{ command: "npm build", cwd: path }]).catch(() => { });
+        await concurrently([{ command: "npm run build", cwd: path }]).catch(() => { });
 
         //start!
         await exec("pm2 start pm2.json");
