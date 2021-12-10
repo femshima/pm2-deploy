@@ -34,9 +34,8 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           APPKEY: ${{ secrets.APPKEY }}
-          BRANCH: ${{ steps.vars.outputs.branch }}"
-          SHA: ${{ steps.vars.outputs.sha_short }}"
+          BRANCH: ${{ steps.vars.outputs.branch }}
+          SHA: ${{ steps.vars.outputs.sha_short }}
         run: |
-          echo "$BRANCH"
           curl -X POST -H "Content-Type: application/json" -d "{\"internalAppKey\":\"$APPKEY\", \"appName\":\"pm2-deploy\", \"branch\":\"$BRANCH\", \"commit\":\"$SHA\"}" "$WEBHOOK_URL"
 
