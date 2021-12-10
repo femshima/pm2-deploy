@@ -23,12 +23,19 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Declare some variables
+        id: vars
+        shell: bash
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+      - shell: bash
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          APPKEY: ${{ secrets.APPKEY }}
+          Branch: ${{ steps.vars.outputs.branch }}"
+          Sha: ${{ steps.vars.outputs.sha_short }}"
+        run: |
+          curl -X POST -H "Content-Type: application/json" -d "{\"internalAppKey\":\"$APPKEY\", \"appName\":\"pm2-deploy\", \"branch\":\"$Branch\", \"commit\":\"$Sha\"}" "$WEBHOOK_URL"
+
