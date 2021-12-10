@@ -33,9 +33,10 @@ jobs:
       - shell: bash
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.WEBHOOK_TOKEN }}
           APPKEY: ${{ secrets.APPKEY }}
           BRANCH: ${{ steps.vars.outputs.branch }}
           SHA: ${{ steps.vars.outputs.sha_short }}
         run: |
-          curl -X POST -H "Content-Type: application/json" -d "{\"internalAppKey\":\"$APPKEY\", \"appName\":\"pm2-deploy\", \"branch\":\"$BRANCH\", \"commit\":\"$SHA\"}" "$WEBHOOK_URL"
+          curl -X POST -H "Content-Type: application/json" -H 'Authorization: Bearer $WEBHOOK_TOKEN' -d "{\"internalAppKey\":\"$APPKEY\", \"appName\":\"pm2-deploy\", \"branch\":\"$BRANCH\", \"commit\":\"$SHA\"}" "$WEBHOOK_URL"
 
