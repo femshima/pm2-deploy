@@ -127,24 +127,22 @@ let handler = async function (data_s: string) {
     return;
 }
 
-let run = function () {
-    let client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
-    client.connect();
-
-    // do some work
-
-    // disconnect whenever connection is no longer needed
-    setTimeout(function () {
-        console.log('disconnecting')
-        client.disconnect();
-        pm2.disconnect();
-    }, 100000);
-}
+let client: WebhookRelayClient | undefined;
 
 pm2.connect((err) => {
     if (err) {
         console.log(err);
         return;
     }
-    run();
+    client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
+    client.connect();
 });
+
+
+process.on("exit", exitCode => {
+    // disconnect whenever connection is no longer needed
+    console.log('disconnecting')
+    client && client.disconnect();
+    pm2.disconnect();
+});
+process.on("SIGINT", () => process.exit(0));
