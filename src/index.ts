@@ -21,10 +21,12 @@ import simpleGit, { SimpleGit } from 'simple-git';
 const git: SimpleGit = simpleGit();
 
 
-import pm2, { ProcessDescription, Proc, StartOptions } from "pm2";
+import pm2, { ProcessDescription, Proc } from "pm2";
 
 
 import concurrently from "concurrently";
+
+import lockfile from "proper-lockfile";
 
 
 function pm2list() {
@@ -127,22 +129,47 @@ let handler = async function (data_s: string) {
     return;
 }
 
+
 let client: WebhookRelayClient | undefined;
 
-pm2.connect((err) => {
-    if (err) {
-        console.log(err);
-        return;
-    }
-    client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
-    client.connect();
-});
+async function app() {
+    const release = await lockfile.lock('.lock');
+    console.log("Acquired Lock. Starting...");
+    pm2.connect((err) => {
+        if (err) {
+            console.log(err);
+            return;
+        }
+        client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
+        client.connect();
+    });
+    process.on("exit", exitCode => {
+        // disconnect whenever connection is no longer needed
+        console.log('disconnecting')
+        client && client.disconnect();
+        pm2.disconnect();
+        release();
+    });
+    process.on("SIGINT", () => process.exit(0));
+}
+
+app()
+    .catch((e) => {
+        let retry = true;
+        console.log("Lock failed.\nRetry lock...");
+        setInterval(() => {
+            if (retry) {
+                console.log("Retry lock...");
+                app()
+                    .catch(() => {
+                        console.log("Lock failed.");
+                        retry = true;
+                    });
+                retry = false;
+            }
+        }, 60000)
+    });
 
 
-process.on("exit", exitCode => {
-    // disconnect whenever connection is no longer needed
-    console.log('disconnecting')
-    client && client.disconnect();
-    pm2.disconnect();
-});
-process.on("SIGINT", () => process.exit(0));
+
+

@@ -3,7 +3,7 @@
         {
             "name": "pm2-deploy",
             "script": "./dist",
-            "instances": 1,
+            "instances": 2,
             "watch": true,
             "exec_mode": "cluster",
             "source_map_support": true
