@@ -21,48 +21,28 @@ import simpleGit, { SimpleGit } from 'simple-git';
 const git: SimpleGit = simpleGit();
 
 
-import pm2, { ProcessDescription, Proc } from "pm2";
-
+import pm2, { ProcessDescription } from "pm2";
 
 import concurrently from "concurrently";
 
 import lockfile from "proper-lockfile";
 
 
-function pm2list() {
-    return new Promise<ProcessDescription[]>((resolve, reject) => {
-        pm2.list((err, list) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(list);
-            }
-        });
-    });
-}
-function pm2delete(process: string | number) {
-    return new Promise<Proc>((resolve, reject) => {
-        pm2.delete(process, (err, proc) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(proc);
-            }
-        })
-    })
-}
+import Verify from "./verify";
+let verify: Verify;
 
-interface data {
+interface APIData {
     internalAppKey?: string,
     appName?: string,
     commit?: string,
     branch?: string
 }
 
+
 let handler = async function (data_s: string) {
     const req = JSON.parse(data_s) as apiType;
     if (req.type === "webhook") {
-        const data = JSON.parse(req.body) as data;
+        const data = JSON.parse(req.body) as APIData;
         if (data.internalAppKey !== internalAppKey) {
             console.log("Auth failed");
             return;
@@ -72,7 +52,7 @@ let handler = async function (data_s: string) {
             console.log("No appName Provided");
             return;
         }
-        const list = await pm2list();
+        const list = await util.promisify(pm2.list)();
         const installed = list.find((proc: ProcessDescription) => proc.name === appName);
         if (!installed) {
             console.log("Program is not installed:", appName);
@@ -95,7 +75,7 @@ let handler = async function (data_s: string) {
         if (installed.name !== "pm2-deploy") {
             //not self-update
             //delete the process
-            await pm2delete(pid);
+            await util.promisify(pm2.delete)(pid);
         }
 
         //git fetch&git merge
@@ -116,11 +96,28 @@ let handler = async function (data_s: string) {
         //execute npm script
         await concurrently([{ command: "npm run build", cwd: path }]).catch(() => { });
 
-        //start!
-        await exec("pm2 start pm2.json");
 
         if (installed.name === "pm2-deploy") {
-            await pm2delete(pid);
+            const list2 = await util.promisify(pm2.list)();
+            const anotherProcess =
+                list2.find((proc: ProcessDescription) =>
+                    proc.name === "pm2-deploy" &&
+                    proc.pid !== process.pid
+                );
+            const pid = anotherProcess?.pid;
+
+            pid && await util.promisify(pm2.reload)(pid);
+
+            const updateresult = await verify.do();
+
+            //失敗してもロールバックしない(複雑になって面倒)
+            if (updateresult) {
+                //exit(pm2 will restart this program)
+                process.exit(0);
+            }
+        } else {
+            //start!
+            await exec("pm2 start pm2.json");
         }
 
         process.chdir(cwd);
@@ -130,31 +127,37 @@ let handler = async function (data_s: string) {
 }
 
 
+pm2.connect((err) => {
+    if (err) {
+        console.log(err);
+        return;
+    }
+    verify = new Verify();
+    process.on("exit", () => {
+        // disconnect whenever connection is no longer needed
+        console.log('disconnecting')
+        pm2.disconnect();
+    });
+    process.on("SIGINT", () => process.exit(0));
+});
+
+
 let client: WebhookRelayClient | undefined;
 
 async function app() {
     const release = await lockfile.lock('.lock');
     console.log("Acquired Lock. Starting...");
-    pm2.connect((err) => {
-        if (err) {
-            console.log(err);
-            return;
-        }
-        client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
-        client.connect();
-    });
-    process.on("exit", exitCode => {
-        // disconnect whenever connection is no longer needed
-        console.log('disconnecting')
+    client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
+    client.connect();
+    process.on("exit", () => {
         client && client.disconnect();
-        pm2.disconnect();
         release();
     });
-    process.on("SIGINT", () => process.exit(0));
 }
 
+
 app()
-    .catch((e) => {
+    .catch(() => {
         let retry = true;
         console.log("Lock failed.\nRetry lock...");
         setInterval(() => {
