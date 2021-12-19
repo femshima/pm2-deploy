@@ -43,6 +43,7 @@ let handler = async function (data_s: string) {
     const req = JSON.parse(data_s) as apiType;
     if (req.type === "webhook") {
         const data = JSON.parse(req.body) as APIData;
+        console.log(data);
         if (data.internalAppKey !== internalAppKey) {
             console.log("Auth failed");
             return;
@@ -126,12 +127,8 @@ let handler = async function (data_s: string) {
     return;
 }
 
-
-pm2.connect((err) => {
-    if (err) {
-        console.log(err);
-        return;
-    }
+async function app() {
+    await util.promisify(pm2.connect)();
     verify = new Verify();
     process.on("exit", () => {
         // disconnect whenever connection is no longer needed
@@ -139,12 +136,11 @@ pm2.connect((err) => {
         pm2.disconnect();
     });
     process.on("SIGINT", () => process.exit(0));
-});
-
+}
 
 let client: WebhookRelayClient | undefined;
 
-async function app() {
+async function webhook() {
     const release = await lockfile.lock('.lock');
     console.log("Acquired Lock. Starting...");
     client = new WebhookRelayClient(apiKey, apiSecret, buckets, handler)
@@ -155,24 +151,24 @@ async function app() {
     });
 }
 
-
 app()
-    .catch(() => {
-        let retry = true;
-        console.log("Lock failed.\nRetry lock...");
-        setInterval(() => {
-            if (retry) {
-                console.log("Retry lock...");
-                app()
-                    .catch(() => {
-                        console.log("Lock failed.");
-                        retry = true;
-                    });
-                retry = false;
-            }
-        }, 60000)
+    .then(() => {
+        webhook()
+            .catch(() => {
+                let retry = true;
+                console.log("Lock failed.\nRetry lock...");
+                setInterval(() => {
+                    if (retry) {
+                        console.log("Retry lock...");
+                        webhook()
+                            .catch(() => {
+                                console.log("Lock failed.");
+                                retry = true;
+                            });
+                        retry = false;
+                    }
+                }, 60000)
+            });
     });
-
-
 
 
