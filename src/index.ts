@@ -22,6 +22,8 @@ const git: SimpleGit = simpleGit();
 
 
 import pm2, { ProcessDescription } from "pm2";
+//const PM2=require("pm2");
+//const pm2=new PM2.constructor() as typeof _pm2;
 
 import concurrently from "concurrently";
 
@@ -53,7 +55,7 @@ let handler = async function (data_s: string) {
             console.log("No appName Provided");
             return;
         }
-        const list = await util.promisify(pm2.list)();
+        const list = await util.promisify(pm2.list.bind(pm2))();
         const installed = list.find((proc: ProcessDescription) => proc.name === appName);
         if (!installed) {
             console.log("Program is not installed:", appName);
@@ -76,7 +78,7 @@ let handler = async function (data_s: string) {
         if (installed.name !== "pm2-deploy") {
             //not self-update
             //delete the process
-            await util.promisify(pm2.delete)(pid);
+            await util.promisify(pm2.delete.bind(pm2))(pid);
         }
 
         //git fetch&git merge
@@ -99,7 +101,7 @@ let handler = async function (data_s: string) {
 
 
         if (installed.name === "pm2-deploy") {
-            const list2 = await util.promisify(pm2.list)();
+            const list2 = await util.promisify(pm2.list.bind(pm2))();
             const anotherProcess =
                 list2.find((proc: ProcessDescription) =>
                     proc.name === "pm2-deploy" &&
@@ -107,7 +109,7 @@ let handler = async function (data_s: string) {
                 );
             const pid = anotherProcess?.pid;
 
-            pid && await util.promisify(pm2.reload)(pid);
+            pid && await util.promisify(pm2.reload.bind(pm2))(pid);
 
             const updateresult = await verify.do();
 
@@ -128,7 +130,13 @@ let handler = async function (data_s: string) {
 }
 
 async function app() {
-    await util.promisify(pm2.connect)();
+    await util.promisify(pm2.connect.bind(pm2))();
+    // pm2.connect((err) => {
+    //     if (err) {
+    //         console.log(err);
+    //         return;
+    //     }
+    // });
     verify = new Verify();
     process.on("exit", () => {
         // disconnect whenever connection is no longer needed
