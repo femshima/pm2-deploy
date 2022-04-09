@@ -29,7 +29,7 @@
     "npm-run-all": "^4.1.5",
     "pm2": "^5.1.2",
     "proper-lockfile": "^4.1.2",
-    "simple-git": "^2.48.0",
+    "simple-git": "^3.5.0",
     "typescript": "^4.5.3",
     "webhookrelay-ws-client": "^0.7.1"
   },
